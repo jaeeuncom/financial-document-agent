@@ -10,11 +10,15 @@ from app.validation.review import create_review_request
 from app.tools.dart_tool import get_financial_statement, calculate_growth_rate
 from app.validation.rules import ReviewRequired
 
+# strict=True is required when using response_format (structured output) with beta.parse.
+# Strict mode also requires additionalProperties=False and all properties listed in required.
+# Optional parameters use anyOf with null instead of being omitted from required.
 TOOLS = [
     {
         "type": "function",
         "function": {
             "name": "get_financial_statement",
+            "strict": True,
             "description": (
                 "Retrieve financial figures for a Korean listed company from the DART API. "
                 "Returns current-year and prior-year values with a DART source URL. "
@@ -34,15 +38,18 @@ TOOLS = [
                         "description": "Fiscal year of the annual report (e.g. 2024)",
                     },
                     "accounts": {
-                        "type": "array",
-                        "items": {"type": "string"},
+                        "anyOf": [
+                            {"type": "array", "items": {"type": "string"}},
+                            {"type": "null"},
+                        ],
                         "description": (
                             "Account names to retrieve (Korean). "
-                            "Omit to use defaults: 매출액, 영업이익, 당기순이익."
+                            "Pass null to use defaults: 매출액, 영업이익, 당기순이익."
                         ),
                     },
                 },
-                "required": ["company", "year"],
+                "required": ["company", "year", "accounts"],
+                "additionalProperties": False,
             },
         },
     },
@@ -50,6 +57,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "calculate_growth_rate",
+            "strict": True,
             "description": (
                 "Calculate year-over-year growth rate as a percentage. "
                 "Must be used for ALL growth rate or change calculations — never compute manually."
@@ -67,6 +75,7 @@ TOOLS = [
                     },
                 },
                 "required": ["current", "previous"],
+                "additionalProperties": False,
             },
         },
     },
