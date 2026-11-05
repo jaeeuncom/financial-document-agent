@@ -20,3 +20,31 @@ class AgentAnswer(BaseModel):
     answer: str
     sources: List[str]
     needs_review: bool = False
+
+
+class ParsedSection(BaseModel):
+    """One narrative section extracted from a DART annual report or PDF."""
+    company: str
+    year: int
+    doc_type: str = "사업보고서"
+    section: str              # canonical: 사업의내용 | MD&A | 연구개발 | 위험요소
+    section_title: str        # detected heading / filename
+    text: str
+    page_or_order: int        # file order in zip, or PDF page number
+    rcept_no: str
+    source_url: str
+    char_count: int = 0
+    extraction_ok: bool = True
+    extraction_error: Optional[str] = None
+
+
+class ExtractionResult(BaseModel):
+    """Extraction outcome for one company + year."""
+    company: str
+    year: int
+    rcept_no: str
+    sections: List[ParsedSection]
+    total_chars: int
+    failed_sections: List[str]   # target sections that were not found
+    extraction_ok: bool
+    error: Optional[str] = None
