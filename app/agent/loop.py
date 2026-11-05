@@ -18,8 +18,9 @@ TOOLS = [
             "description": (
                 "Retrieve financial figures for a Korean listed company from the DART API. "
                 "Returns current-year and prior-year values with a DART source URL. "
-                "Use this for any question about revenue (매출액), operating profit (영업이익), "
-                "net income (당기순이익), or other financial accounts."
+                "Use this for income statement accounts (매출액, 영업이익, 당기순이익) "
+                "and balance sheet accounts (자산총계, 부채총계, 자본총계). "
+                "Company name accepts aliases (e.g. '삼전', '현대차', '네이버', 'SK hynix')."
             ),
             "parameters": {
                 "type": "object",

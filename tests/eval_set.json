@@ -1,0 +1,142 @@
+[
+  {
+    "id": "fin-001",
+    "category": "numeric",
+    "question": "삼성전자의 2024년 매출액은?",
+    "tool_params": {"company": "삼성전자", "year": 2024, "accounts": ["매출액"]},
+    "expected": {
+      "values": {"매출액": 0},
+      "must_contain": ["매출액"],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Pending: owner to verify against DART viewer (dart.fss.or.kr)"
+  },
+  {
+    "id": "fin-002",
+    "category": "numeric",
+    "question": "삼성전자의 2024년 영업이익은?",
+    "tool_params": {"company": "삼성전자", "year": 2024, "accounts": ["영업이익"]},
+    "expected": {
+      "values": {"영업이익": 0},
+      "must_contain": ["영업이익"],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Pending: owner to verify against DART viewer"
+  },
+  {
+    "id": "fin-003",
+    "category": "numeric",
+    "question": "삼성전자의 2024년 당기순이익은?",
+    "tool_params": {"company": "삼성전자", "year": 2024, "accounts": ["당기순이익"]},
+    "expected": {
+      "values": {"당기순이익": 0},
+      "must_contain": ["당기순이익"],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Pending: owner to verify against DART viewer"
+  },
+  {
+    "id": "fin-004",
+    "category": "numeric",
+    "question": "삼성전자의 2024년 자산총계는?",
+    "tool_params": {"company": "삼성전자", "year": 2024, "accounts": ["자산총계"]},
+    "expected": {
+      "values": {"자산총계": 0},
+      "must_contain": ["자산총계"],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Pending: owner to verify against DART viewer"
+  },
+  {
+    "id": "fin-005",
+    "category": "numeric",
+    "question": "SK하이닉스의 2024년 매출액과 영업이익은?",
+    "tool_params": {"company": "SK하이닉스", "year": 2024, "accounts": ["매출액", "영업이익"]},
+    "expected": {
+      "values": {"매출액": 0, "영업이익": 0},
+      "must_contain": ["매출액", "영업이익"],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Pending: owner to verify against DART viewer"
+  },
+  {
+    "id": "fin-006",
+    "category": "numeric",
+    "question": "현대자동차의 2024년 매출액은?",
+    "tool_params": {"company": "현대자동차", "year": 2024, "accounts": ["매출액"]},
+    "expected": {
+      "values": {"매출액": 0},
+      "must_contain": ["매출액"],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Pending: owner to verify against DART viewer"
+  },
+  {
+    "id": "fin-007",
+    "category": "numeric",
+    "question": "NAVER의 2024년 매출액은?",
+    "tool_params": {"company": "NAVER", "year": 2024, "accounts": ["매출액"]},
+    "expected": {
+      "values": {"매출액": 0},
+      "must_contain": ["매출액"],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Pending: owner to verify. NAVER may report as '수익(매출액)' in DART — handled via ACCOUNT_VARIANTS"
+  },
+  {
+    "id": "fin-008",
+    "category": "numeric",
+    "question": "LG전자의 2024년 매출액은?",
+    "tool_params": {"company": "LG전자", "year": 2024, "accounts": ["매출액"]},
+    "expected": {
+      "values": {"매출액": 0},
+      "must_contain": ["매출액"],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Pending: owner to verify against DART viewer"
+  },
+  {
+    "id": "fin-009",
+    "category": "numeric",
+    "question": "삼전의 2024년 매출액은?",
+    "tool_params": {"company": "삼전", "year": 2024, "accounts": ["매출액"]},
+    "expected": {
+      "values": {"매출액": 0},
+      "must_contain": ["매출액"],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Alias '삼전' -> '삼성전자'. Pending: owner to verify value"
+  },
+  {
+    "id": "adv-001",
+    "category": "adversarial",
+    "question": "없는회사의 2024년 매출액은?",
+    "tool_params": {},
+    "expected": {
+      "values": {},
+      "must_contain": [],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": [],
+      "should_need_review": true
+    },
+    "ground_truth_note": "Unknown company should trigger ReviewRequired and set needs_review=true"
+  }
+]

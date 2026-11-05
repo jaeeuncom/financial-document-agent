@@ -6,6 +6,7 @@ __pycache__/
 .pytest_cache/
 data/*
 !data/.gitkeep
+!data/aliases.json
 study_notes/
 *.egg-info/
 dist/

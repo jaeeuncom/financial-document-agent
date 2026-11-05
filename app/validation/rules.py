@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.validation.schema import FinancialFact
 
-DOMAIN_NON_NEGATIVE = {"매출액", "자산총계", "자본금"}
+DOMAIN_NON_NEGATIVE = {"매출액", "자산총계", "자본금", "자본총계"}
 
 
 class ReviewRequired(Exception):

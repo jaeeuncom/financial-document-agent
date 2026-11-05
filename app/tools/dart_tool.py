@@ -4,6 +4,7 @@ import io
 import json
 import zipfile
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import Optional
 
 import requests
@@ -12,7 +13,28 @@ from app import config
 from app.validation.schema import FinancialFact
 from app.validation.rules import ReviewRequired, check_missing, check_domain
 
+# Default accounts to retrieve when none are specified
 DEFAULT_ACCOUNTS = ["매출액", "영업이익", "당기순이익"]
+
+# Balance-sheet accounts available via get_financial_statement
+BS_ACCOUNTS = ["자산총계", "부채총계", "자본총계"]
+
+# Maps canonical account name -> list of DART API account_nm variants (company-specific naming)
+ACCOUNT_VARIANTS: dict[str, list[str]] = {
+    "매출액": ["매출액", "수익(매출액)", "영업수익", "매출"],
+    "영업이익": ["영업이익", "영업이익(손실)"],
+    "당기순이익": ["당기순이익", "당기순이익(손실)", "분기순이익"],
+    "자산총계": ["자산총계"],
+    "부채총계": ["부채총계"],
+    "자본총계": ["자본총계"],
+}
+
+# Reverse lookup: DART account_nm -> canonical name
+_VARIANT_TO_CANONICAL: dict[str, str] = {
+    variant: canonical
+    for canonical, variants in ACCOUNT_VARIANTS.items()
+    for variant in variants
+}
 
 
 def _parse_amount(raw: str) -> Optional[int]:
@@ -20,6 +42,13 @@ def _parse_amount(raw: str) -> Optional[int]:
     if s in ("-", "", "N/A"):
         return None
     return int(s.replace(",", "").replace(" ", ""))
+
+
+def _load_aliases() -> dict[str, str]:
+    aliases_path = config.DATA_DIR / "aliases.json"
+    if aliases_path.exists():
+        return json.loads(aliases_path.read_text(encoding="utf-8"))
+    return {}
 
 
 def _load_corp_codes() -> dict[str, str]:
@@ -61,18 +90,33 @@ def _load_corp_codes() -> dict[str, str]:
 
 def resolve_corp_code(company: str) -> str:
     codes = _load_corp_codes()
+
+    # 1. Exact match
     if company in codes:
         return codes[company]
+
+    # 2. Alias lookup -> canonical name -> corp code
+    aliases = _load_aliases()
+    canonical = aliases.get(company)
+    if canonical and canonical in codes:
+        return codes[canonical]
+
     raise ReviewRequired(
         "company_not_found",
         f"'{company}' not found in DART listed companies",
     )
 
 
+def _raw_cache_path(corp_code: str, year: int, use_all: bool) -> Path:
+    suffix = "all" if use_all else "single"
+    return config.DATA_DIR / "raw" / "dart" / f"{corp_code}_{year}_{suffix}.json"
+
+
 def get_financial_statement(
     company: str,
     year: int,
     accounts: Optional[list[str]] = None,
+    use_all: bool = False,
 ) -> list[FinancialFact]:
     if not accounts:
         accounts = DEFAULT_ACCOUNTS
@@ -82,20 +126,39 @@ def get_financial_statement(
 
     corp_code = resolve_corp_code(company)
 
-    url = f"{config.DART_BASE}/fnlttSinglAcnt.json"
-    resp = requests.get(
-        url,
-        params={
-            "crtfc_key": config.DART_API_KEY,
-            "corp_code": corp_code,
-            "bsns_year": str(year),
-            "reprt_code": "11011",
-        },
-        timeout=30,
-    )
-    resp.raise_for_status()
+    endpoint = "fnlttSinglAcntAll" if use_all else "fnlttSinglAcnt"
+    url = f"{config.DART_BASE}/{endpoint}.json"
 
-    data = resp.json()
+    # Serve from raw cache if available (avoids redundant API calls)
+    cache_path = _raw_cache_path(corp_code, year, use_all)
+    if cache_path.exists():
+        data = json.loads(cache_path.read_text(encoding="utf-8"))
+    else:
+        resp = requests.get(
+            url,
+            params={
+                "crtfc_key": config.DART_API_KEY,
+                "corp_code": corp_code,
+                "bsns_year": str(year),
+                "reprt_code": "11011",
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("status") != "000":
+            raise ReviewRequired(
+                "dart_api_error",
+                f"status={data.get('status')}, message={data.get('message')}",
+            )
+
+        # Cache raw response for review evidence and re-use
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
     if data.get("status") != "000":
         raise ReviewRequired(
             "dart_api_error",
@@ -108,19 +171,23 @@ def get_financial_statement(
     for item in data.get("list", []):
         if item.get("fs_div") != "CFS":
             continue
+
         account_nm = (item.get("account_nm") or "").strip()
-        if account_nm not in accounts:
+        # Normalize variant name to canonical (e.g. "수익(매출액)" -> "매출액")
+        canonical = _VARIANT_TO_CANONICAL.get(account_nm, account_nm)
+
+        if canonical not in accounts:
             continue
-        if account_nm in seen:
+        if canonical in seen:
             continue
-        seen.add(account_nm)
+        seen.add(canonical)
 
         rcept_no = item.get("rcept_no", "")
         fact = FinancialFact(
             company=company,
             corp_code=corp_code,
             year=year,
-            account=account_nm,
+            account=canonical,
             fs_div="CFS",
             current_value=_parse_amount(item.get("thstrm_amount", "-")),
             prior_value=_parse_amount(item.get("frmtrm_amount", "-")),
