@@ -138,5 +138,75 @@
       "should_need_review": true
     },
     "ground_truth_note": "Unknown company should trigger ReviewRequired and set needs_review=true"
+  },
+  {
+    "id": "nar-001",
+    "category": "narrative",
+    "question": "삼성전자의 2024년 주요 사업 분야는 무엇인가요?",
+    "tool_params": {"company": "삼성전자", "year": 2024, "section": "사업의내용"},
+    "expected": {
+      "values": {},
+      "must_contain": ["반도체", "디스플레이", "스마트폰"],
+      "expected_tool": "search_sections",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Samsung's business segments include semiconductor (DS), MX (mobile), display, and home appliances — answer should mention at least one segment"
+  },
+  {
+    "id": "nar-002",
+    "category": "narrative",
+    "question": "SK하이닉스의 2024년 연구개발 전략은 무엇인가요?",
+    "tool_params": {"company": "SK하이닉스", "year": 2024, "section": "연구개발"},
+    "expected": {
+      "values": {},
+      "must_contain": ["HBM", "AI", "메모리"],
+      "expected_tool": "search_sections",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "SK Hynix R&D focus in 2024 was HBM (High Bandwidth Memory) for AI — answer should mention HBM or AI memory"
+  },
+  {
+    "id": "nar-003",
+    "category": "narrative",
+    "question": "현대자동차의 2024년 주요 위험 요소는 무엇인가요?",
+    "tool_params": {"company": "현대자동차", "year": 2024, "section": "위험요소"},
+    "expected": {
+      "values": {},
+      "must_contain": ["환율", "경쟁"],
+      "expected_tool": "search_sections",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Hyundai risk factors typically include FX risk, raw material prices, EV competition — answer should mention at least one risk"
+  },
+  {
+    "id": "nar-004",
+    "category": "narrative",
+    "question": "NAVER의 2024년 경영진 분석(MD&A)에서 언급된 성장 동력은 무엇인가요?",
+    "tool_params": {"company": "NAVER", "year": 2024, "section": "MD&A"},
+    "expected": {
+      "values": {},
+      "must_contain": ["클라우드", "커머스", "AI"],
+      "expected_tool": "search_sections",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "NAVER MD&A 2024 growth drivers: Search Ads, Commerce (SmartStore), Webtoon, Cloud, AI (HyperCLOVA)"
+  },
+  {
+    "id": "nar-005",
+    "category": "narrative",
+    "question": "LG전자의 2024년 사업의내용에서 B2B 사업 관련 내용이 있나요?",
+    "tool_params": {"company": "LG전자", "year": 2024, "section": "사업의내용"},
+    "expected": {
+      "values": {},
+      "must_contain": ["B2B", "솔루션"],
+      "expected_tool": "search_sections",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "LG Electronics has significant B2B segments (HVAC, vehicle components, commercial displays) — answer should mention B2B or business solutions"
   }
 ]
