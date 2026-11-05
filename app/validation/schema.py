@@ -48,3 +48,26 @@ class ExtractionResult(BaseModel):
     failed_sections: List[str]   # target sections that were not found
     extraction_ok: bool
     error: Optional[str] = None
+
+
+class Chunk(BaseModel):
+    """
+    A single RAG chunk derived from one ParsedSection.
+
+    text              : raw chunk text (stored, displayed, returned to user)
+    text_with_context : '[company | year | section]\\n' + text — used for embedding
+    chunk_id          : sha256(text_with_context)[:16] — cache key for embeddings
+    """
+    chunk_id: str
+    company: str
+    year: int
+    doc_type: str
+    section: str            # canonical: 사업의내용 | MD&A | 연구개발 | 위험요소
+    section_title: str
+    text: str
+    text_with_context: str
+    char_count: int
+    chunk_index: int        # 0-based within the parent section
+    total_chunks: int       # total chunks from the same section
+    rcept_no: str
+    source_url: str
