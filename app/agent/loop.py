@@ -155,6 +155,7 @@ def _dispatch(question: str, name: str, arguments_str: str) -> str:
                 year=args.get("year"),
                 section=args.get("section"),
                 top_k=min(int(args.get("top_k") or 5), 10),
+                rerank=True,
             )
             if not results:
                 return json.dumps(
