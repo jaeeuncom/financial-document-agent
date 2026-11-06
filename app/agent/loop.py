@@ -56,6 +56,52 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "search_sections",
+            "strict": True,
+            "description": (
+                "Search indexed annual report sections for narrative content. "
+                "Use this for qualitative questions about business strategy, R&D, "
+                "risk factors, competitive environment, or any question requiring "
+                "text from the annual report. "
+                "Sections: 사업의내용 (business overview), MD&A (management analysis), "
+                "연구개발 (R&D), 위험요소 (risk factors). "
+                "Returns the most relevant text chunks with DART source URLs."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query in Korean describing what you are looking for",
+                    },
+                    "company": {
+                        "anyOf": [{"type": "string"}, {"type": "null"}],
+                        "description": "Filter to a specific company (Korean name). Pass null for all companies.",
+                    },
+                    "year": {
+                        "anyOf": [{"type": "integer"}, {"type": "null"}],
+                        "description": "Filter to a specific fiscal year. Pass null for all years.",
+                    },
+                    "section": {
+                        "anyOf": [{"type": "string"}, {"type": "null"}],
+                        "description": (
+                            "Filter to one section: 사업의내용, MD&A, 연구개발, 위험요소. "
+                            "Pass null to search all sections."
+                        ),
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of text chunks to return (1–10, default 5).",
+                    },
+                },
+                "required": ["query", "company", "year", "section", "top_k"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "calculate_growth_rate",
             "strict": True,
             "description": (
@@ -90,6 +136,7 @@ Rules (non-negotiable):
 4. Format KRW amounts in readable Korean units: show both the Korean form (e.g. 300조 8,703억 원) and the raw value.
 5. The sources list must contain ONLY source_url values returned by tools. Never fabricate URLs.
 6. Answer entirely in Korean.
+7. For qualitative questions (business strategy, R&D, risks, competitive landscape), use search_sections to retrieve text from indexed annual reports. Build your answer ONLY from the returned text chunks — do not add information from memory.
 """
 
 
@@ -100,6 +147,25 @@ def _dispatch(question: str, name: str, arguments_str: str) -> str:
         return json.dumps({"status": "error", "detail": f"invalid JSON: {exc}"})
 
     try:
+        if name == "search_sections":
+            from app.retrieval.vector_store import search_narrative
+            results = search_narrative(
+                query=args["query"],
+                company=args.get("company"),
+                year=args.get("year"),
+                section=args.get("section"),
+                top_k=min(int(args.get("top_k") or 5), 10),
+            )
+            if not results:
+                return json.dumps(
+                    {
+                        "status": "no_results",
+                        "detail": "검색 결과가 없습니다. 문서가 아직 인덱싱되지 않았거나 해당 내용이 없습니다.",
+                    },
+                    ensure_ascii=False,
+                )
+            return json.dumps([r.model_dump() for r in results], ensure_ascii=False)
+
         if name == "get_financial_statement":
             facts = get_financial_statement(
                 company=args["company"],
