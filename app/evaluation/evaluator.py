@@ -16,6 +16,7 @@ from typing import Any
 from app.evaluation.metrics import (
     compute_summary,
     evaluate_adversarial_result,
+    evaluate_narrative_result,
     evaluate_numeric_result,
 )
 from app.validation.rules import ReviewRequired
@@ -83,6 +84,43 @@ def _run_numeric(item: dict[str, Any]) -> dict[str, Any]:
         }
 
 
+def _run_narrative(item: dict[str, Any]) -> dict[str, Any]:
+    """
+    Retrieval-phase narrative eval: search_narrative → keyword hit rate.
+
+    Evaluates retrieval quality only (no LLM call) so the eval suite runs without
+    an OpenAI key. Returns passed=None when documents are not yet indexed.
+    """
+    from app.retrieval.vector_store import search_narrative
+    from app.evaluation.retrieval_eval import evaluate_retrieval
+
+    q = item["question"]
+    params = item.get("tool_params", {})
+
+    try:
+        results = search_narrative(
+            query=q,
+            company=params.get("company"),
+            year=params.get("year"),
+            section=params.get("section"),
+            top_k=5,
+        )
+    except Exception as exc:
+        return {
+            "id": item["id"],
+            "category": item["category"],
+            "question": q,
+            "passed": False,
+            "keyword_hit_rate": 0.0,
+            "keyword_coverage": {},
+            "source_ok": False,
+            "num_results": 0,
+            "error": str(exc),
+        }
+
+    return evaluate_retrieval(item, results)
+
+
 def _run_adversarial(item: dict[str, Any]) -> dict[str, Any]:
     from app.agent.loop import run_agent
 
@@ -127,14 +165,15 @@ def run_eval(
             result = _run_numeric(item)
         elif category == "adversarial":
             result = _run_adversarial(item)
+        elif category == "narrative":
+            result = _run_narrative(item)
         else:
-            # narrative / mixed — not yet implemented (Day 6+)
             result = {
                 "id": qid,
                 "category": category,
                 "question": question,
                 "passed": None,
-                "error": f"category '{category}' not yet implemented",
+                "error": f"unknown category '{category}'",
             }
 
         status = "SKIP" if result.get("passed") is None else ("PASS" if result["passed"] else "FAIL")
@@ -170,13 +209,15 @@ def main() -> None:
 
     print("\n" + "=" * 50)
     print("Results:")
-    print(f"  Total:        {len(results)}")
-    print(f"  Passed:       {summary['passed']}")
-    print(f"  Failed:       {summary['total'] - summary['passed']}")
+    print(f"  Total:            {len(results)}")
+    print(f"  Passed:           {summary['passed']}")
+    print(f"  Failed:           {summary['total'] - summary['passed']}")
     if skipped:
-        print(f"  Skipped:      {skipped}")
-    print(f"  Accuracy:     {summary['accuracy']}%")
-    print(f"  Source match: {summary['source_match_rate']}%")
+        print(f"  Skipped:          {skipped}")
+    print(f"  Accuracy:         {summary['accuracy']}%")
+    print(f"  Source match:     {summary['source_match_rate']}%")
+    if summary.get("avg_keyword_hit_rate") is not None:
+        print(f"  Avg keyword hit:  {summary['avg_keyword_hit_rate']}%")
     print("=" * 50)
 
 
