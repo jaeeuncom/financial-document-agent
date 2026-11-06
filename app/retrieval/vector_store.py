@@ -135,10 +135,15 @@ def search_narrative(
     year: Optional[int] = None,
     section: Optional[str] = None,
     top_k: int = 5,
+    rerank: bool = False,
+    max_context_chars: int = 3000,
 ) -> list[SearchResult]:
     """
     High-level search: embed query text, then search with optional metadata filters.
-    Used by the agent's search_sections tool.
+
+    When rerank=True, over-fetches (top_k * 3) from Qdrant and applies
+    hybrid BM25+dense reranking (RRF) followed by deduplication and
+    character-budget trimming.
     """
     vectors = embed_texts([query])
     query_vector = vectors[0]
@@ -151,7 +156,17 @@ def search_narrative(
     if section:
         filters["section"] = section
 
-    return search(query_vector, top_k=top_k, filters=filters or None)
+    fetch_k = top_k * 3 if rerank else top_k
+    results = search(query_vector, top_k=fetch_k, filters=filters or None)
+
+    if rerank and results:
+        from app.retrieval.hybrid import hybrid_rerank
+        from app.retrieval.context import deduplicate, trim_to_budget
+        results = hybrid_rerank(query, results, top_k=top_k)
+        results = deduplicate(results)
+        results = trim_to_budget(results, max_chars=max_context_chars)
+
+    return results
 
 
 def collection_count(filters: Optional[dict] = None) -> int:
