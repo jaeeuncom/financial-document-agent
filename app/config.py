@@ -11,11 +11,14 @@ DATA_DIR = ROOT / "data"
 REVIEW_DIR = DATA_DIR / "review_queue"
 PARSED_DIR = DATA_DIR / "parsed"
 
+QDRANT_DIR = DATA_DIR / "qdrant"
+
 DATA_DIR.mkdir(exist_ok=True)
 REVIEW_DIR.mkdir(parents=True, exist_ok=True)
 (DATA_DIR / "raw" / "dart").mkdir(parents=True, exist_ok=True)
 (DATA_DIR / "raw" / "dart" / "docs").mkdir(parents=True, exist_ok=True)
 PARSED_DIR.mkdir(exist_ok=True)
+QDRANT_DIR.mkdir(exist_ok=True)
 
 OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")

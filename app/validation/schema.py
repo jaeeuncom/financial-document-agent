@@ -50,6 +50,17 @@ class ExtractionResult(BaseModel):
     error: Optional[str] = None
 
 
+class SearchResult(BaseModel):
+    """A single result from the vector store search."""
+    chunk_id: str
+    company: str
+    year: int
+    section: str
+    text: str
+    source_url: str
+    score: float
+
+
 class Chunk(BaseModel):
     """
     A single RAG chunk derived from one ParsedSection.
