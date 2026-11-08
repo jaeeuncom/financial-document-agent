@@ -102,11 +102,13 @@ def rag_node(state: AgentState) -> dict:
 
 
 def calculate_node(state: AgentState) -> dict:
-    """Compute year-over-year growth rates for all available financial facts."""
+    """Compute growth rates and comparison table for all available financial facts."""
+    from app.tools.compare_tool import compare_financial_data
+
+    facts = [f for f in state.get("tool_results", []) if f.get("status") != "needs_review"]
+
     growth_rates: list[dict] = []
-    for fact in state.get("tool_results", []):
-        if fact.get("status") == "needs_review":
-            continue
+    for fact in facts:
         current = fact.get("current_value")
         prior = fact.get("prior_value")
         if current is None or prior is None:
@@ -122,7 +124,16 @@ def calculate_node(state: AgentState) -> dict:
         except ReviewRequired:
             pass  # prior == 0: skip growth rate for this fact
 
-    return {"computed": {"growth_rates": growth_rates}}
+    # Comparison table is useful when there are multiple companies or years
+    unique_companies = {f.get("company") for f in facts}
+    unique_years = {f.get("year") for f in facts}
+    comparison = (
+        compare_financial_data(facts)
+        if len(unique_companies) > 1 or len(unique_years) > 1
+        else []
+    )
+
+    return {"computed": {"growth_rates": growth_rates, "comparison": comparison}}
 
 
 def generate_answer(state: AgentState) -> dict:
@@ -133,6 +144,7 @@ def generate_answer(state: AgentState) -> dict:
     facts = [f for f in state.get("tool_results", []) if f.get("status") != "needs_review"]
     errors = [f for f in state.get("tool_results", []) if f.get("status") == "needs_review"]
     growth_rates = state.get("computed", {}).get("growth_rates", [])
+    comparison = state.get("computed", {}).get("comparison", [])
 
     chunks_raw = state.get("retrieved_chunks", [])
     try:
@@ -154,6 +166,8 @@ def generate_answer(state: AgentState) -> dict:
         f"{json.dumps(facts, ensure_ascii=False, indent=2) if facts else '(재무 데이터 없음)'}\n\n"
         f"성장률 계산:\n"
         f"{json.dumps(growth_rates, ensure_ascii=False, indent=2) if growth_rates else '(계산된 성장률 없음)'}\n\n"
+        f"비교 분석 데이터:\n"
+        f"{json.dumps(comparison, ensure_ascii=False, indent=2) if comparison else '(비교 데이터 없음)'}\n\n"
         f"사업보고서 서술 섹션:\n{narrative_text}\n\n"
         f"참고 가능한 출처 URL:\n"
         f"{chr(10).join(source_urls) if source_urls else '(없음)'}\n\n"
