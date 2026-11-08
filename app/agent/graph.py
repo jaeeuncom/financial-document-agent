@@ -7,8 +7,12 @@ Flow:
 """
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
+
 from langgraph.graph import END, START, StateGraph
 
+from app import config
 from app.agent.nodes import (
     analyze_question,
     calculate_node,
@@ -80,11 +84,36 @@ def _get_graph():
 
 
 # ---------------------------------------------------------------------------
+# State persistence
+# ---------------------------------------------------------------------------
+
+def _save_run(question: str, transitions: list[dict], final_state: dict) -> None:
+    """Write run state transitions to data/runs/ for debugging. Never raises."""
+    try:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+        path = config.RUNS_DIR / f"run_{ts}.json"
+        record = {
+            "timestamp": ts,
+            "question": question,
+            "route": final_state.get("route"),
+            "entities": final_state.get("entities"),
+            "node_sequence": [list(t.keys())[0] for t in transitions],
+            "tool_results_count": len(final_state.get("tool_results", [])),
+            "retrieved_chunks_count": len(final_state.get("retrieved_chunks", [])),
+            "needs_review": final_state.get("needs_review", False),
+            "transitions": transitions,
+        }
+        path.write_text(json.dumps(record, ensure_ascii=False, indent=2, default=str))
+    except Exception:
+        pass  # persistence failure must not affect the answer
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
 def run_graph(question: str) -> AgentAnswer:
-    """Invoke the LangGraph agent and return a structured AgentAnswer."""
+    """Invoke the LangGraph agent, persist the run, and return a structured AgentAnswer."""
     initial: AgentState = {
         "question": question,
         "entities": {"companies": [], "years": [], "accounts": []},
@@ -95,8 +124,18 @@ def run_graph(question: str) -> AgentAnswer:
         "answer": None,
         "needs_review": False,
     }
-    final = _get_graph().invoke(initial)
-    answer_data = final.get("answer")
+
+    transitions: list[dict] = []
+    final_state: dict = dict(initial)
+
+    for chunk in _get_graph().stream(initial):
+        transitions.append(chunk)
+        for updates in chunk.values():
+            final_state.update(updates)
+
+    _save_run(question, transitions, final_state)
+
+    answer_data = final_state.get("answer")
     if answer_data:
         return AgentAnswer(**answer_data)
     return AgentAnswer(
