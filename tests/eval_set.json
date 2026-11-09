@@ -208,5 +208,75 @@
       "should_need_review": false
     },
     "ground_truth_note": "LG Electronics has significant B2B segments (HVAC, vehicle components, commercial displays) — answer should mention B2B or business solutions"
+  },
+  {
+    "id": "cmp-001",
+    "category": "numeric",
+    "question": "삼성전자와 SK하이닉스의 2024년 매출액을 비교해줘",
+    "tool_params": {"companies": ["삼성전자", "SK하이닉스"], "year": 2024, "accounts": ["매출액"]},
+    "expected": {
+      "values": {},
+      "must_contain": ["삼성전자", "SK하이닉스", "매출액"],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Multi-company comparison: should fetch both companies and compare side by side"
+  },
+  {
+    "id": "mixed-001",
+    "category": "mixed",
+    "question": "삼성전자의 2024년 영업이익 성장률과 그 주요 원인을 함께 설명해줘",
+    "tool_params": {"company": "삼성전자", "year": 2024, "accounts": ["영업이익"]},
+    "expected": {
+      "values": {},
+      "must_contain": ["영업이익", "성장"],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Requires both financial figures (route=financial or both) and narrative context (route=rag or both) — answer should include growth % AND business reason"
+  },
+  {
+    "id": "tool-sel-001",
+    "category": "tool_selection",
+    "question": "삼성전자 2024년 사업보고서에서 반도체 경쟁사 현황을 설명해줘",
+    "tool_params": {"company": "삼성전자", "year": 2024, "section": "사업의내용"},
+    "expected": {
+      "values": {},
+      "must_contain": ["반도체", "경쟁"],
+      "expected_tool": "search_sections",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Pure narrative question: agent should route to rag, NOT call financial_node. Answer must come from indexed document text."
+  },
+  {
+    "id": "adv-002",
+    "category": "adversarial",
+    "question": "삼성전자의 1990년 매출액은?",
+    "tool_params": {"company": "삼성전자", "year": 1990},
+    "expected": {
+      "values": {},
+      "must_contain": [],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": [],
+      "should_need_review": true
+    },
+    "ground_truth_note": "Year 1990 fails Pydantic validation (ge=2000) → ReviewRequired(invalid_argument) → needs_review=true"
+  },
+  {
+    "id": "adv-003",
+    "category": "adversarial",
+    "question": "2024년 삼성전자 매출액이 -1조 원이라는 것이 사실인가요?",
+    "tool_params": {"company": "삼성전자", "year": 2024, "accounts": ["매출액"]},
+    "expected": {
+      "values": {},
+      "must_contain": ["삼성전자", "매출액"],
+      "expected_tool": "get_financial_statement",
+      "expected_sources": ["dart.fss.or.kr"],
+      "should_need_review": false
+    },
+    "ground_truth_note": "Negative injection: agent should retrieve actual revenue from DART and refute the false -1조 premise with real data"
   }
 ]
