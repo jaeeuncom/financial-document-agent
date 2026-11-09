@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import io
 import json
+import time
 import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
 
 import requests
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app import config
 from app.validation.schema import FinancialFact
@@ -35,6 +37,70 @@ _VARIANT_TO_CANONICAL: dict[str, str] = {
     for canonical, variants in ACCOUNT_VARIANTS.items()
     for variant in variants
 }
+
+
+class FinancialStatementQuery(BaseModel):
+    """Pydantic validation model for get_financial_statement inputs."""
+    company: str = Field(min_length=1)
+    year: int = Field(ge=2000, le=2030)
+    accounts: Optional[list[str]] = None
+
+    @field_validator("company")
+    @classmethod
+    def strip_company(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("company name cannot be blank")
+        return stripped
+
+    @field_validator("accounts")
+    @classmethod
+    def accounts_not_empty(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        if v is not None and len(v) == 0:
+            raise ValueError("accounts cannot be empty; pass None to use defaults")
+        return v
+
+
+def _call_dart_api(url: str, params: dict, max_retries: int = 3) -> dict:
+    """
+    Call the DART API with exponential backoff for rate-limit errors.
+
+    Status codes:
+      000 — success
+      020 — rate limit: retry up to max_retries times (backoff: 1 s, 2 s, …)
+      013 — no data for this period: raise ReviewRequired("no_data_for_period")
+      other — raise ReviewRequired("dart_api_error")
+    """
+    for attempt in range(max_retries):
+        resp = requests.get(url, params=params, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        status = data.get("status")
+
+        if status == "000":
+            return data
+
+        if status == "020":  # rate limit: retry with backoff
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+            raise ReviewRequired(
+                "dart_rate_limit",
+                f"DART API rate limit after {max_retries} retries",
+            )
+
+        if status == "013":  # no annual report for this period
+            raise ReviewRequired(
+                "no_data_for_period",
+                f"No annual report data for this period: {data.get('message', '')}",
+            )
+
+        raise ReviewRequired(
+            "dart_api_error",
+            f"DART API error: status={status}, message={data.get('message', '')}",
+        )
+
+    raise ReviewRequired("dart_api_error", "unexpected: retry loop exhausted")  # unreachable
 
 
 def _parse_amount(raw: str) -> Optional[int]:
@@ -118,6 +184,16 @@ def get_financial_statement(
     accounts: Optional[list[str]] = None,
     use_all: bool = False,
 ) -> list[FinancialFact]:
+    # Validate inputs before any network calls
+    try:
+        query = FinancialStatementQuery(company=company, year=year, accounts=accounts)
+    except ValidationError as exc:
+        raise ReviewRequired("invalid_argument", str(exc)) from exc
+
+    company = query.company  # stripped
+    year = query.year
+    accounts = query.accounts
+
     if not accounts:
         accounts = DEFAULT_ACCOUNTS
 
@@ -129,40 +205,28 @@ def get_financial_statement(
     endpoint = "fnlttSinglAcntAll" if use_all else "fnlttSinglAcnt"
     url = f"{config.DART_BASE}/{endpoint}.json"
 
-    # Serve from raw cache if available (avoids redundant API calls)
     cache_path = _raw_cache_path(corp_code, year, use_all)
     if cache_path.exists():
         data = json.loads(cache_path.read_text(encoding="utf-8"))
+        if data.get("status") != "000":
+            raise ReviewRequired(
+                "dart_api_error",
+                f"cached response has bad status: {data.get('status')}",
+            )
     else:
-        resp = requests.get(
+        data = _call_dart_api(
             url,
-            params={
+            {
                 "crtfc_key": config.DART_API_KEY,
                 "corp_code": corp_code,
                 "bsns_year": str(year),
                 "reprt_code": "11011",
             },
-            timeout=30,
         )
-        resp.raise_for_status()
-        data = resp.json()
-
-        if data.get("status") != "000":
-            raise ReviewRequired(
-                "dart_api_error",
-                f"status={data.get('status')}, message={data.get('message')}",
-            )
-
-        # Cache raw response for review evidence and re-use
+        # Cache successful response for re-use and review evidence
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-
-    if data.get("status") != "000":
-        raise ReviewRequired(
-            "dart_api_error",
-            f"status={data.get('status')}, message={data.get('message')}",
         )
 
     seen: set[str] = set()
