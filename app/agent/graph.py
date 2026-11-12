@@ -18,7 +18,9 @@ from app.agent.nodes import (
     calculate_node,
     financial_node,
     generate_answer,
+    human_review_node,
     rag_node,
+    verify_node,
 )
 from app.agent.state import AgentState
 from app.validation.schema import AgentAnswer
@@ -40,6 +42,14 @@ def _route_after_rag(state: AgentState) -> str:
     return "generate" if state.get("route") == "rag" else "calculate"
 
 
+def _route_after_verify(state: AgentState) -> str:
+    if state.get("verify_passed", True):
+        return "end"
+    if state.get("regenerate_count", 0) < 2:
+        return "regenerate"   # first failure: try once more
+    return "human_review"     # second failure: escalate
+
+
 # ---------------------------------------------------------------------------
 # Graph construction
 # ---------------------------------------------------------------------------
@@ -52,6 +62,8 @@ def build_graph():
     builder.add_node("rag", rag_node)
     builder.add_node("calculate", calculate_node)
     builder.add_node("generate", generate_answer)
+    builder.add_node("verify", verify_node)
+    builder.add_node("human_review", human_review_node)
 
     builder.add_edge(START, "analyze")
     builder.add_conditional_edges("analyze", _route_after_analyze, {
@@ -67,7 +79,13 @@ def build_graph():
         "calculate": "calculate",
     })
     builder.add_edge("calculate", "generate")
-    builder.add_edge("generate", END)
+    builder.add_edge("generate", "verify")
+    builder.add_conditional_edges("verify", _route_after_verify, {
+        "end": END,
+        "regenerate": "generate",
+        "human_review": "human_review",
+    })
+    builder.add_edge("human_review", END)
 
     return builder.compile()
 
@@ -123,6 +141,8 @@ def run_graph(question: str) -> AgentAnswer:
         "computed": {},
         "answer": None,
         "needs_review": False,
+        "verify_passed": True,
+        "regenerate_count": 0,
     }
 
     transitions: list[dict] = []

@@ -14,6 +14,12 @@ class QuestionAnalysis(BaseModel):
     route: Literal["financial", "rag", "both"]
 
 
+class VerifyResult(BaseModel):
+    """Structured output from the verify_node LLM call."""
+    supported: bool
+    reason: str  # one-sentence explanation
+
+
 class AgentState(TypedDict):
     question: str
     entities: dict           # {"companies": [...], "years": [...], "accounts": [...]}
@@ -23,3 +29,5 @@ class AgentState(TypedDict):
     computed: dict           # {"growth_rates": [...]}
     answer: Optional[dict]   # AgentAnswer.model_dump()
     needs_review: bool
+    verify_passed: bool      # True if answer passed verification (default True)
+    regenerate_count: int    # number of answer regeneration attempts so far

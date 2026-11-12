@@ -6,8 +6,8 @@ import json
 from openai import OpenAI
 
 from app import config
-from app.agent.prompts import ANALYZE_SYSTEM, GENERATE_SYSTEM
-from app.agent.state import AgentState, QuestionAnalysis
+from app.agent.prompts import ANALYZE_SYSTEM, GENERATE_SYSTEM, VERIFY_SYSTEM
+from app.agent.state import AgentState, QuestionAnalysis, VerifyResult
 from app.tools.dart_tool import calculate_growth_rate, get_financial_statement
 from app.validation.review import create_review_request
 from app.validation.rules import ReviewRequired
@@ -197,3 +197,78 @@ def generate_answer(state: AgentState) -> dict:
             needs_review=True,
         ).model_dump()
     }
+
+
+def verify_node(state: AgentState) -> dict:
+    """
+    Ask the LLM whether the generated answer is supported by the tool results.
+
+    If there is no data to verify against (empty facts and chunks), skip the
+    LLM call and pass automatically.  On any LLM error, also pass — verification
+    failure must never block a user response.
+
+    Returns verify_passed=True → graph routes to END.
+    Returns verify_passed=False → graph routes to generate (first failure) or
+    human_review (second failure); regenerate_count is incremented.
+    """
+    facts = [f for f in state.get("tool_results", []) if f.get("status") != "needs_review"]
+    chunks = state.get("retrieved_chunks", [])
+
+    # Nothing to verify against — answer is likely "no data available"
+    if not facts and not chunks:
+        return {"verify_passed": True}
+
+    answer_data = state.get("answer") or {}
+    answer_text = answer_data.get("answer", "")
+
+    data_summary = json.dumps(
+        {"facts": facts[:5], "chunks": [c.get("text", "")[:200] for c in chunks[:3]]},
+        ensure_ascii=False,
+    )
+    user_msg = f"Answer:\n{answer_text}\n\nData:\n{data_summary}"
+
+    try:
+        client = OpenAI(api_key=config.OPENAI_API_KEY)
+        response = client.beta.chat.completions.parse(
+            model=config.OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": VERIFY_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+            response_format=VerifyResult,
+        )
+        result = response.choices[0].message.parsed
+        if result is None:
+            return {"verify_passed": True}
+
+        if result.supported:
+            return {"verify_passed": True}
+
+        regen_count = state.get("regenerate_count", 0)
+        return {"verify_passed": False, "regenerate_count": regen_count + 1}
+
+    except Exception:
+        # Verification failure must not block the user response
+        return {"verify_passed": True}
+
+
+def human_review_node(state: AgentState) -> dict:
+    """
+    Create a review file and mark the answer as needing human review.
+    Called when verify_node fails twice (answer not supported by data).
+    """
+    answer_data = state.get("answer") or {}
+    evidence = {
+        "tool_results_count": len(state.get("tool_results", [])),
+        "retrieved_chunks_count": len(state.get("retrieved_chunks", [])),
+        "regenerate_count": state.get("regenerate_count", 0),
+    }
+    create_review_request(
+        question=state["question"],
+        extracted=answer_data,
+        evidence=evidence,
+        failed_rule="answer_not_supported",
+    )
+    # Propagate needs_review into the answer dict so run_graph can read it
+    updated_answer = {**answer_data, "needs_review": True}
+    return {"needs_review": True, "answer": updated_answer}
