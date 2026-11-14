@@ -19,7 +19,10 @@ from app.evaluation.metrics import (
     evaluate_narrative_result,
     evaluate_numeric_result,
 )
+from app.evaluation.report import generate_report
 from app.validation.rules import ReviewRequired
+
+REPORT_DEFAULT_PATH = Path(__file__).parent.parent.parent / "docs" / "EVALUATION_REPORT.md"
 
 EVAL_SET_PATH = Path(__file__).parent.parent.parent / "tests" / "eval_set.json"
 
@@ -188,6 +191,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run financial agent evaluation")
     parser.add_argument("--dry-run", action="store_true", help="Validate structure only, no API calls")
     parser.add_argument("--id", dest="question_id", help="Run a single question by ID")
+    parser.add_argument("--report", action="store_true", help="Write EVALUATION_REPORT.md after run")
+    parser.add_argument(
+        "--output",
+        default=str(REPORT_DEFAULT_PATH),
+        help=f"Report output path (default: {REPORT_DEFAULT_PATH})",
+    )
     args = parser.parse_args()
 
     questions = _load_eval_set()
@@ -200,25 +209,31 @@ def main() -> None:
     print(f"Running {len(questions)} eval question(s)...\n")
     results = run_eval(questions, dry_run=args.dry_run)
 
-    if args.dry_run:
-        print(f"\nDry run complete. {len(results)} questions validated.")
-        return
-
     summary = compute_summary([r for r in results if r.get("passed") is not None])
     skipped = sum(1 for r in results if r.get("passed") is None)
 
-    print("\n" + "=" * 50)
-    print("Results:")
-    print(f"  Total:            {len(results)}")
-    print(f"  Passed:           {summary['passed']}")
-    print(f"  Failed:           {summary['total'] - summary['passed']}")
-    if skipped:
-        print(f"  Skipped:          {skipped}")
-    print(f"  Accuracy:         {summary['accuracy']}%")
-    print(f"  Source match:     {summary['source_match_rate']}%")
-    if summary.get("avg_keyword_hit_rate") is not None:
-        print(f"  Avg keyword hit:  {summary['avg_keyword_hit_rate']}%")
-    print("=" * 50)
+    if not args.dry_run:
+        print("\n" + "=" * 50)
+        print("Results:")
+        print(f"  Total:            {len(results)}")
+        print(f"  Passed:           {summary['passed']}")
+        print(f"  Failed:           {summary['total'] - summary['passed']}")
+        if skipped:
+            print(f"  Skipped:          {skipped}")
+        print(f"  Accuracy:         {summary['accuracy']}%")
+        print(f"  Source match:     {summary['source_match_rate']}%")
+        if summary.get("avg_keyword_hit_rate") is not None:
+            print(f"  Avg keyword hit:  {summary['avg_keyword_hit_rate']}%")
+        print("=" * 50)
+    else:
+        print(f"\nDry run complete. {len(results)} questions validated.")
+
+    if args.report:
+        report_md = generate_report(results, summary)
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(report_md, encoding="utf-8")
+        print(f"\nReport written to: {out_path}")
 
 
 if __name__ == "__main__":
